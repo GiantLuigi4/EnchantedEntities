@@ -13,12 +13,17 @@ import net.minecraft.command.arguments.EntityArgument;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.ServerPlayerEntity;
+import net.minecraft.util.IWorldPosCallable;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.text.StringTextComponent;
 import net.minecraft.util.text.TranslationTextComponent;
+import net.minecraft.world.World;
 import net.minecraftforge.fml.common.ObfuscationReflectionHelper;
 import net.minecraftforge.fml.loading.FMLEnvironment;
 
 import java.lang.reflect.Field;
+import java.util.Optional;
+import java.util.function.BiFunction;
 
 //https://cdn.discordapp.com/attachments/197165501741400064/784273590999973908/brigadier_basics_pt2.txt
 public class EnchantEntityCommand {
@@ -126,7 +131,13 @@ public class EnchantEntityCommand {
 						}))
 				.then(Commands.literal("open_container")
 						.executes(context -> {
-							((ServerPlayerEntity) context.getSource().getEntity()).openContainer(new Container(Container.TYPE, 0, ((ServerPlayerEntity) context.getSource().getEntity()).inventory));
+							((ServerPlayerEntity) context.getSource().getEntity()).openContainer(new Container(Container.TYPE, 0, ((ServerPlayerEntity) context.getSource().getEntity()).inventory,
+									new IWorldPosCallable() {
+								@Override
+								public <T> Optional<T> apply(BiFunction<World, BlockPos, T> p_221484_1_) {
+									return Optional.of(p_221484_1_.apply(context.getSource().getWorld(),context.getSource().getEntity().getPosition()));
+								}
+							}));
 							return 0;
 						}));
 	}

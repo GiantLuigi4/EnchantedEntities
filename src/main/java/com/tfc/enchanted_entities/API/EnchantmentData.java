@@ -94,7 +94,7 @@ public class EnchantmentData {
 	}
 	
 	public ITextComponent getDisplayName(LivingEntity entity) {
-		return new TranslationTextComponent(registryName.replace(":","."));
+		return new TranslationTextComponent("enchanted_entities.enchant."+registryName.replace(":","."));
 	}
 	
 	public void tickEntity(LivingEntity entity, EntityEnchantment enchantment) {

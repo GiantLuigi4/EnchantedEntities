@@ -4,11 +4,14 @@ import com.mojang.blaze3d.matrix.MatrixStack;
 import com.tfc.enchanted_entities.API.EnchantmentData;
 import com.tfc.enchanted_entities.API.EnchantmentManager;
 import com.tfc.enchanted_entities.API.EntityEnchantment;
+import com.tfc.enchanted_entities.block.EntityEnchatnerBlock;
 import com.tfc.enchanted_entities.events.RenderDragonEvent;
 import com.tfc.enchanted_entities.gui.Container;
 import com.tfc.enchanted_entities.gui.ContainerScreen;
 import com.tfc.enchanted_entities.network.EnchantmentDataPacket;
 import com.tfc.enchanted_entities.network.EnchantmentRequestPacket;
+import net.minecraft.block.Block;
+import net.minecraft.block.Blocks;
 import net.minecraft.client.gui.ScreenManager;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EnderDragonRenderer;
@@ -276,6 +279,13 @@ public class EnchantedEntities {
 		public static void regContainerType(RegistryEvent.Register<ContainerType<?>> event) {
 			event.getRegistry().register(
 					(Container.TYPE = new ContainerType<>(Container::new)).setRegistryName("enchanted_entities", "container")
+			);
+		}
+		
+		@SubscribeEvent
+		public static void registerBlocks(RegistryEvent.Register<Block> event) {
+			event.getRegistry().register(
+					new EntityEnchatnerBlock(Block.Properties.from(Blocks.ENCHANTING_TABLE)).setRegistryName("enchanted_entities:entity_enchanter")
 			);
 		}
 	}
