@@ -1,0 +1,13 @@
+{
+  "required": false,
+  "package": "com.tfc.enchanted_entities.mixins",
+  "compatibilityLevel": "JAVA_8",
+  "refmap": "enchanted_entities.refmap.json",
+  "client": [
+    "DragonRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "minVersion": "0.8"
+}

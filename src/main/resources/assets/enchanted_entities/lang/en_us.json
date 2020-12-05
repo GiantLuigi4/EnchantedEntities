@@ -1,0 +1,3 @@
+{
+  "enchanted_entities.command.help": "Enchants an entity.\nUsage:\n/enchant_entity enchantment:registry_name <[int]level, enchant <[int]level>, disenchant> entity selector"
+}
