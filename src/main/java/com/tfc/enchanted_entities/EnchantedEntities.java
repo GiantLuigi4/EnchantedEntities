@@ -5,27 +5,35 @@ import com.tfc.enchanted_entities.API.EnchantmentData;
 import com.tfc.enchanted_entities.API.EnchantmentManager;
 import com.tfc.enchanted_entities.API.EntityEnchantment;
 import com.tfc.enchanted_entities.events.RenderDragonEvent;
+import com.tfc.enchanted_entities.gui.Container;
+import com.tfc.enchanted_entities.gui.ContainerScreen;
 import com.tfc.enchanted_entities.network.EnchantmentDataPacket;
 import com.tfc.enchanted_entities.network.EnchantmentRequestPacket;
+import net.minecraft.client.gui.ScreenManager;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EnderDragonRenderer;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.boss.dragon.EnderDragonEntity;
 import net.minecraft.entity.monster.CreeperEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.inventory.container.ContainerType;
 import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
 import net.minecraft.util.DamageSource;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.Vec3d;
+import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RenderLivingEvent;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.RegistryEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.living.LivingEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.entity.living.LootingLevelEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.event.server.FMLServerStartingEvent;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.fml.loading.FMLEnvironment;
 import net.minecraftforge.fml.network.NetworkRegistry;
 import net.minecraftforge.fml.network.PacketDistributor;
@@ -77,6 +85,9 @@ public class EnchantedEntities {
 		});
 		INSTANCE.registerMessage(1, EnchantmentDataPacket.class, EnchantmentDataPacket::writePacketData, EnchantmentDataPacket::new, (packet, contex) -> {
 		});
+		
+		FMLJavaModLoadingContext.get().getModEventBus().register(this);
+		MinecraftForge.EVENT_BUS.register(this);
 	}
 	
 	public static void onServerStarting(FMLServerStartingEvent event1) {
@@ -234,11 +245,39 @@ public class EnchantedEntities {
 								.setOnLoot((lootingEvent, enchantment) -> {
 									lootingEvent.setLootingLevel(0);
 									lootingEvent.setCanceled(lootingEvent.isCancelable());
+								}),
+						new EnchantmentData(3, "minecraft:unbreaking", 1)
+								.setOnDamaged((entity,enchant,event)->{
+									if (new Random().nextDouble() * 10 <= enchant.level) {
+										event.setCanceled(event.isCancelable());
+									}
+									return event.getAmount()-(enchant.level/10f);
+//									return event.getAmount();
 								})
 				)
 		);
 		
 		EnchantEntityCommand.register(event1.getCommandDispatcher());
+	}
+	
+	//https://github.com/3TUSK/SRA/blob/bleeding/src/main/java/info/tritusk/anchor/AnchorScreen.java
+	@Mod.EventBusSubscriber(bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
+	public static final class ScreenRegistry {
+		@SubscribeEvent
+		public static void setup(FMLClientSetupEvent event) {
+			ScreenManager.registerFactory(Container.TYPE, ContainerScreen::new);
+		}
+	}
+	
+	@Mod.EventBusSubscriber(bus = Mod.EventBusSubscriber.Bus.MOD)
+	public static class ContainerRegistry {
+		//https://github.com/3TUSK/SRA/blob/bleeding/src/main/java/info/tritusk/anchor/AnchorScreen.java
+		@SubscribeEvent
+		public static void regContainerType(RegistryEvent.Register<ContainerType<?>> event) {
+			event.getRegistry().register(
+					(Container.TYPE = new ContainerType<>(Container::new)).setRegistryName("enchanted_entities", "container")
+			);
+		}
 	}
 	
 	private static void onDeath(LivingDeathEvent event) {
@@ -260,14 +299,14 @@ public class EnchantedEntities {
 		if (event.getSource().getTrueSource() != null) {
 			if (event.getSource().getTrueSource() instanceof LivingEntity) {
 				for (EntityEnchantment enchantment : EnchantmentManager.getEnchantmentsForEntity((LivingEntity) event.getSource().getTrueSource()))
-					enchantment.data.onHitEntity((LivingEntity) event.getSource().getTrueSource(), event, enchantment);
+					enchantment.data.onAttack((LivingEntity) event.getSource().getTrueSource(), event, enchantment);
 			} else if (event.getSource().getImmediateSource() != null) {
 				for (EntityEnchantment enchantment : EnchantmentManager.getEnchantmentsForEntity((LivingEntity) event.getSource().getImmediateSource()))
-					enchantment.data.onHitEntity((LivingEntity) event.getSource().getImmediateSource(), event, enchantment);
+					enchantment.data.onAttack((LivingEntity) event.getSource().getImmediateSource(), event, enchantment);
 			}
 		}
 		for (EntityEnchantment enchantment : EnchantmentManager.getEnchantmentsForEntity(event.getEntityLiving()))
-			enchantment.data.onEntityHit(event.getEntityLiving(), event, enchantment);
+			enchantment.data.onDamaged(event.getEntityLiving(), event, enchantment);
 	}
 	
 	private static void poolLoot(LootingLevelEvent event) {

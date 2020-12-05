@@ -6,11 +6,13 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.tfc.enchanted_entities.API.EnchantmentData;
 import com.tfc.enchanted_entities.API.EnchantmentManager;
 import com.tfc.enchanted_entities.API.EntityEnchantment;
+import com.tfc.enchanted_entities.gui.Container;
 import net.minecraft.command.CommandSource;
 import net.minecraft.command.Commands;
 import net.minecraft.command.arguments.EntityArgument;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.player.ServerPlayerEntity;
 import net.minecraft.util.text.StringTextComponent;
 import net.minecraft.util.text.TranslationTextComponent;
 import net.minecraftforge.fml.common.ObfuscationReflectionHelper;
@@ -22,10 +24,10 @@ import java.lang.reflect.Field;
 public class EnchantEntityCommand {
 	public static LiteralArgumentBuilder construct() {
 		LiteralArgumentBuilder<CommandSource> builder = Commands.literal("enchant_entity").requires(commandSource ->
-		{
-			System.out.println(commandSource.hasPermissionLevel(2));
-			return commandSource.hasPermissionLevel(2);
-		}
+				{
+					System.out.println(commandSource.hasPermissionLevel(2));
+					return commandSource.hasPermissionLevel(2);
+				}
 		)
 				.then(Commands.literal("disenchant")
 						.then(Commands.argument("entity", EntityArgument.entities())
@@ -109,17 +111,24 @@ public class EnchantEntityCommand {
 									}))));
 		}
 		
-		return builder.then(Commands.literal("help").executes(context -> {
-			context.getSource().sendFeedback(new StringTextComponent("" +
-					"Enchants an entity.\n" +
-					"Usage:\n" +
-					"/enchant_entity enchantment:registry_name level entity_selector\n" +
-					"/enchant_entity enchantment:registry_name enchant level entity_selector\n" +
-					"/enchant_entity enchantment:registry_name disenchant entity_selector\n" +
-					"/enchant_entity disenchant entity_selector" +
-					""), false);
-			return 0;
-		}));
+		return builder
+				.then(Commands.literal("help")
+						.executes(context -> {
+							context.getSource().sendFeedback(new StringTextComponent("" +
+									"Enchants an entity.\n" +
+									"Usage:\n" +
+									"/enchant_entity enchantment:registry_name level entity_selector\n" +
+									"/enchant_entity enchantment:registry_name enchant level entity_selector\n" +
+									"/enchant_entity enchantment:registry_name disenchant entity_selector\n" +
+									"/enchant_entity disenchant entity_selector" +
+									""), false);
+							return 0;
+						}))
+				.then(Commands.literal("open_container")
+						.executes(context -> {
+							((ServerPlayerEntity) context.getSource().getEntity()).openContainer(new Container(Container.TYPE, 0, ((ServerPlayerEntity) context.getSource().getEntity()).inventory));
+							return 0;
+						}));
 	}
 	
 	public static void register(CommandDispatcher<CommandSource> dispatcher) {

@@ -1,0 +1,50 @@
+{
+  "minecraft:creeper": {
+    "black_listed_enchants": [],
+    "enchantment_weight": 0.5
+  },
+  "minecraft:phantom": {
+    "black_listed_enchants": [],
+    "enchantment_weight": 0.3
+  },
+  "minecraft:spider": {
+    "black_listed_enchants": [],
+    "enchantment_weight": 0.2
+  },
+  "minecraft:pillager": {
+    "black_listed_enchants": [],
+    "enchantment_weight": 0.4
+  },
+  "minecraft:vindicator": {
+    "black_listed_enchants": [],
+    "enchantment_weight": 0.5
+  },
+  "minecraft:evoker": {
+    "black_listed_enchants": [],
+    "enchantment_weight": 0.6
+  },
+  "minecraft:illusioner": {
+    "black_listed_enchants": [],
+    "enchantment_weight": 0.8
+  },
+  "minecraft:drowned": {
+    "black_listed_enchants": [],
+    "enchantment_weight": 0.3
+  },
+  "minecraft:ender_dragon": {
+    "black_listed_enchants": [],
+    "enchantment_weight": 0.3333333333
+  },
+  "minecraft:vex": {
+    "black_listed_enchants": [],
+    "enchantment_weight": 0.01
+  },
+  "minecraft:blaze": {
+    "black_listed_enchants": [],
+    "enchantment_weight": 0.55
+  },
+  "minecraft:default": {
+    "black_listed_enchants": [],
+    "weight": 0.25
+  }
+}
