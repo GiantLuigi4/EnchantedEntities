@@ -1,21 +1,36 @@
 package com.tfc.enchanted_entities.gui;
 
 import com.tfc.enchanted_entities.API.EnchantmentData;
+import com.tfc.enchanted_entities.API.EnchantmentManager;
 import com.tfc.enchanted_entities.API.EntityEnchantment;
 import com.tfc.enchanted_entities.EnchantedEntities;
+import com.tfc.enchanted_entities.utils.WorldPosCallable;
+import net.minecraft.advancements.CriteriaTriggers;
+import net.minecraft.client.gui.screen.DemoScreen;
+import net.minecraft.client.gui.screen.inventory.AnvilScreen;
+import net.minecraft.enchantment.Enchantment;
 import net.minecraft.enchantment.EnchantmentHelper;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.player.PlayerInventory;
+import net.minecraft.entity.player.ServerPlayerEntity;
 import net.minecraft.inventory.IInventory;
 import net.minecraft.inventory.Inventory;
 import net.minecraft.inventory.container.ClickType;
 import net.minecraft.inventory.container.ContainerType;
 import net.minecraft.inventory.container.INamedContainerProvider;
 import net.minecraft.inventory.container.Slot;
+import net.minecraft.item.EnchantedBookItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.nbt.CompoundNBT;
+import net.minecraft.nbt.ListNBT;
+import net.minecraft.stats.Stats;
 import net.minecraft.util.IWorldPosCallable;
 import net.minecraft.util.IntReferenceHolder;
+import net.minecraft.util.SoundCategory;
+import net.minecraft.util.SoundEvents;
+import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.registry.Registry;
 import net.minecraft.util.text.ITextComponent;
@@ -26,16 +41,18 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
+import static net.minecraft.inventory.container.RepairContainer.getNewRepairCost;
+
 public class Container extends net.minecraft.inventory.container.Container implements INamedContainerProvider {
 	protected final IInventory thisInventory = new Inventory(37);
 	
 	public static ContainerType<Container> TYPE;
 	
-	private final IntReferenceHolder xpSeed = IntReferenceHolder.single();
+	private final IntReferenceHolder xpSeed = IntReferenceHolder.create(new int[]{new Random().nextInt()},0);
 	public final int[] enchantLevels = new int[3];
 	public final int[] enchantClue = new int[]{-1, -1, -1};
 	public final int[] worldClue = new int[]{-1, -1, -1};
-	private IWorldPosCallable worldPosCallable;
+	private WorldPosCallable worldPosCallable;
 	
 	private final Random rand = new Random();
 	
@@ -50,7 +67,7 @@ public class Container extends net.minecraft.inventory.container.Container imple
 		return this;
 	}
 	
-	public Container(ContainerType<?> containerTypeIn, int id, PlayerInventory playerInventoryIn, IWorldPosCallable pos) {
+	public Container(ContainerType<?> containerTypeIn, int id, PlayerInventory playerInventoryIn, WorldPosCallable pos) {
 		super(containerTypeIn,id);
 		
 		populateContainer(playerInventoryIn);
@@ -93,7 +110,7 @@ public class Container extends net.minecraft.inventory.container.Container imple
 		this.trackInt(IntReferenceHolder.create(this.worldClue, 2));
 	}
 	
-	public Container(int id, PlayerInventory playerInventoryIn, IWorldPosCallable pos) {
+	public Container(int id, PlayerInventory playerInventoryIn, WorldPosCallable pos) {
 		super(TYPE,id);
 		
 		populateContainer(playerInventoryIn);
@@ -185,6 +202,7 @@ public class Container extends net.minecraft.inventory.container.Container imple
 							}
 						}
 						
+						xpSeed.set(new Random().nextInt());
 						this.rand.setSeed((long)this.xpSeed.get());
 						
 						for(int i1 = 0; i1 < 3; ++i1) {
@@ -216,8 +234,8 @@ public class Container extends net.minecraft.inventory.container.Container imple
 						this.enchantLevels[i] = 0;
 						this.enchantClue[i] = -1;
 						this.worldClue[i] = -1;
-						xpSeed.set(new Random().nextInt());
 					}
+					xpSeed.set(new Random().nextInt());
 				}
 			}
 		}
@@ -233,9 +251,9 @@ public class Container extends net.minecraft.inventory.container.Container imple
 		
 		ArrayList<EntityEnchantment> entityEnchantments=new ArrayList<>();
 		
-		int amt = rand.nextInt(Math.max(level/5,1))+1;
-		
-		int i=1;
+//		int amt = rand.nextInt(Math.max(level/5,1))+1;
+//
+//		int i=1;
 		
 		level = Math.max(1,level);
 		
@@ -251,7 +269,7 @@ public class Container extends net.minecraft.inventory.container.Container imple
 			EnchantmentData data = list.remove(this.rand.nextInt(list.size()));
 			float lvl = rand.nextFloat()/(1/(1-(1f/level)));
 			entityEnchantments.add(new EntityEnchantment((int)(lvl*data.maxLevel),data));
-			i++;
+//			i++;
 		}
 		
 		return entityEnchantments;
@@ -261,5 +279,95 @@ public class Container extends net.minecraft.inventory.container.Container imple
 	public void onContainerClosed(PlayerEntity playerIn) {
 		super.onContainerClosed(playerIn);
 		playerIn.dropItem(thisInventory.getStackInSlot(36),false);
+	}
+	
+	@Override
+	public boolean enchantItem(PlayerEntity playerIn, int id) {
+		if (playerIn.world.isRemote) return true;
+		if (id >=0 && id <=2) {
+			ItemStack stack = thisInventory.getStackInSlot(36);
+			if (stack.getCount() >= id+1) {
+				if (((Container)playerIn.openContainer).worldPosCallable != null) {
+					if (((Container)playerIn.openContainer).worldPosCallable.apply((world,pos)-> {
+						List<LivingEntity> entities = world.getLoadedEntitiesWithinAABB(LivingEntity.class,
+								new AxisAlignedBB(pos.getX(), pos.getY(), pos.getZ(), pos.getX() + 1, pos.getY() + 1, pos.getZ() + 1),
+								LivingEntity::isAlive
+						);
+						entities.add(playerIn);
+						for (LivingEntity entityIn : entities) {
+							if (!EnchantmentManager.isEnchanted(entityIn)) {
+								EnchantmentManager.enchantEntity(entityIn, new EntityEnchantment(worldClue[id], EnchantedEntities.dataRegistry.get(enchantClue[id])));
+								if (id == 2) {
+									while (rand.nextFloat() >= 0.5) {
+										EntityEnchantment entityEnchantment = getEnchantmentList(new ItemStack(Items.LAPIS_LAZULI, 64), 2, 10).get(0);
+										if (!EnchantmentManager.isEnchantedWith(entityIn, entityEnchantment.data)) {
+											EnchantmentManager.enchantEntity(entityIn, entityEnchantment);
+										}
+										xpSeed.set(new Random().nextInt());
+										rand.setSeed(new Random().nextLong());
+									}
+								}
+								world.playSound(null, pos, SoundEvents.BLOCK_ENCHANTMENT_TABLE_USE, SoundCategory.BLOCKS, 1.0F, world.rand.nextFloat() * 0.1F + 0.9F);
+								
+								playerIn.experienceLevel -= id;
+								
+								for (int i = 0; i < 3; i++) {
+									this.enchantLevels[i] = 0;
+									this.enchantClue[i] = -1;
+									this.worldClue[i] = -1;
+								}
+								xpSeed.set(new Random().nextInt());
+								
+								onCraftMatrixChanged(thisInventory);
+								return "success";
+							}
+						}
+						return "fail";
+					}).orElse("fail").equals("success")) {
+						stack.setCount(stack.getCount()-(id+1));
+					}
+				}
+			}
+			return true;
+		}
+		
+		if (id == 4) {
+			ItemStack stack = thisInventory.getStackInSlot(36);
+			int k2 = stack.getRepairCost();
+			
+			k2 = getNewRepairCost(k2);
+			if (stack.getItem() instanceof EnchantedBookItem && k2 <=playerIn.experienceLevel) {
+				List<LivingEntity> entities = worldPosCallable.world.getLoadedEntitiesWithinAABB(LivingEntity.class,
+						new AxisAlignedBB(worldPosCallable.pos.getX(), worldPosCallable.pos.getY(), worldPosCallable.pos.getZ(), worldPosCallable.pos.getX() + 1, worldPosCallable.pos.getY() + 1, worldPosCallable.pos.getZ() + 1),
+						LivingEntity::isAlive
+				);
+				entities.add(playerIn);
+				for (LivingEntity entityIn : entities) {
+					EnchantedBookItem.getEnchantments(stack).forEach(enchantment ->
+							EnchantmentManager.enchantEntity(entityIn,
+									new EntityEnchantment(
+											((CompoundNBT) enchantment).getInt("lvl"),
+											EnchantmentManager.getEnchantmentByID(
+													((CompoundNBT) enchantment).getString("id")
+											))));
+					worldPosCallable.world.playSound(null, worldPosCallable.pos, SoundEvents.BLOCK_ENCHANTMENT_TABLE_USE, SoundCategory.BLOCKS, 1.0F, worldPosCallable.world.rand.nextFloat() * 0.1F + 0.9F);
+					
+					for (int i = 0; i < 3; i++) {
+						this.enchantLevels[i] = 0;
+						this.enchantClue[i] = -1;
+						this.worldClue[i] = -1;
+					}
+					xpSeed.set(new Random().nextInt());
+					
+					playerIn.experienceLevel += (-k2);
+					
+					thisInventory.setInventorySlotContents(36,new ItemStack(Items.BOOK));
+					
+					onCraftMatrixChanged(thisInventory);
+				}
+			}
+		}
+		
+		return super.enchantItem(playerIn,id);
 	}
 }

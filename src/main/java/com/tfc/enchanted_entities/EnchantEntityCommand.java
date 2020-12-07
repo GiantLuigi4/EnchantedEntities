@@ -7,6 +7,7 @@ import com.tfc.enchanted_entities.API.EnchantmentData;
 import com.tfc.enchanted_entities.API.EnchantmentManager;
 import com.tfc.enchanted_entities.API.EntityEnchantment;
 import com.tfc.enchanted_entities.gui.Container;
+import com.tfc.enchanted_entities.utils.WorldPosCallable;
 import net.minecraft.command.CommandSource;
 import net.minecraft.command.Commands;
 import net.minecraft.command.arguments.EntityArgument;
@@ -131,13 +132,7 @@ public class EnchantEntityCommand {
 						}))
 				.then(Commands.literal("open_container")
 						.executes(context -> {
-							((ServerPlayerEntity) context.getSource().getEntity()).openContainer(new Container(Container.TYPE, 0, ((ServerPlayerEntity) context.getSource().getEntity()).inventory,
-									new IWorldPosCallable() {
-								@Override
-								public <T> Optional<T> apply(BiFunction<World, BlockPos, T> p_221484_1_) {
-									return Optional.of(p_221484_1_.apply(context.getSource().getWorld(),context.getSource().getEntity().getPosition()));
-								}
-							}));
+							((ServerPlayerEntity) context.getSource().getEntity()).openContainer(new Container(Container.TYPE, 0, ((ServerPlayerEntity) context.getSource().getEntity()).inventory, new WorldPosCallable(context.getSource().getWorld(),context.getSource().getEntity().getPosition())));
 							return 0;
 						}));
 	}

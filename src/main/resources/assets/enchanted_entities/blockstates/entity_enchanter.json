@@ -1,0 +1,5 @@
+{
+    "variants": {
+        "": { "model": "enchanted_entities:block/entity_enchanter" }
+    }
+}

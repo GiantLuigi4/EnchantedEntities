@@ -5,9 +5,12 @@ import com.tfc.enchanted_entities.API.EnchantmentData;
 import com.tfc.enchanted_entities.API.EnchantmentManager;
 import com.tfc.enchanted_entities.API.EntityEnchantment;
 import com.tfc.enchanted_entities.block.EntityEnchatnerBlock;
+import com.tfc.enchanted_entities.data.EntityStats;
+import com.tfc.enchanted_entities.data.Loader;
 import com.tfc.enchanted_entities.events.RenderDragonEvent;
 import com.tfc.enchanted_entities.gui.Container;
 import com.tfc.enchanted_entities.gui.ContainerScreen;
+import com.tfc.enchanted_entities.item.GlintHider;
 import com.tfc.enchanted_entities.network.EnchantmentDataPacket;
 import com.tfc.enchanted_entities.network.EnchantmentRequestPacket;
 import net.minecraft.block.Block;
@@ -19,7 +22,9 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.boss.dragon.EnderDragonEntity;
 import net.minecraft.entity.monster.CreeperEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.player.ServerPlayerEntity;
 import net.minecraft.inventory.container.ContainerType;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.DamageSource;
 import net.minecraft.util.ResourceLocation;
@@ -28,6 +33,7 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RenderLivingEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegistryEvent;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.living.LivingEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
@@ -35,6 +41,7 @@ import net.minecraftforge.event.entity.living.LootingLevelEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
+import net.minecraftforge.fml.event.server.FMLServerAboutToStartEvent;
 import net.minecraftforge.fml.event.server.FMLServerStartingEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.fml.loading.FMLEnvironment;
@@ -44,9 +51,7 @@ import net.minecraftforge.fml.network.simple.SimpleChannel;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Random;
+import java.util.*;
 import java.util.function.BiConsumer;
 
 // The value here should match an entry in the META-INF/mods.toml file
@@ -64,13 +69,17 @@ public class EnchantedEntities {
 	// Directly reference a log4j logger.
 	private static final Logger LOGGER = LogManager.getLogger();
 	
+	private static final ArrayList<EnchantmentDataPacket> dataPackets = new ArrayList<>();
+	
 	public EnchantedEntities() {
 		MinecraftForge.EVENT_BUS.register(this);
 		MinecraftForge.EVENT_BUS.addListener(EnchantedEntities::livingTickEvent);
 		MinecraftForge.EVENT_BUS.addListener(EnchantedEntities::onEntityHurt);
+		MinecraftForge.EVENT_BUS.addListener(EnchantedEntities::onServerAboutToStart);
 		MinecraftForge.EVENT_BUS.addListener(EnchantedEntities::onServerStarting);
 		MinecraftForge.EVENT_BUS.addListener(EnchantedEntities::poolLoot);
 		MinecraftForge.EVENT_BUS.addListener(EnchantedEntities::onDeath);
+		MinecraftForge.EVENT_BUS.addListener(EnchantedEntities::worldTick);
 		
 		if (FMLEnvironment.dist.isClient()) {
 			MinecraftForge.EVENT_BUS.addListener(EnchantedEntities::renderLiving);
@@ -78,15 +87,15 @@ public class EnchantedEntities {
 		}
 		
 		INSTANCE.registerMessage(0, EnchantmentRequestPacket.class, EnchantmentRequestPacket::writePacketData, EnchantmentRequestPacket::new, (packet, contex) -> {
-			INSTANCE.send(
-					PacketDistributor.PLAYER.with(() -> contex.get().getSender()),
-					new EnchantmentDataPacket(
-							EnchantmentManager.isEnchanted((LivingEntity) contex.get().getSender().world.getEntityByID(packet.id)),
-							packet.id
-					)
-			);
+			dataPackets.add(new EnchantmentDataPacket(
+					EnchantmentManager.isVisiblyEnchanted((LivingEntity) contex.get().getSender().world.getEntityByID(packet.id)),
+					packet.id, contex.get().getSender().getEntityId()
+			));
+			contex.get().setPacketHandled(true);
 		});
+		
 		INSTANCE.registerMessage(1, EnchantmentDataPacket.class, EnchantmentDataPacket::writePacketData, EnchantmentDataPacket::new, (packet, contex) -> {
+			contex.get().setPacketHandled(true);
 		});
 		
 		FMLJavaModLoadingContext.get().getModEventBus().register(this);
@@ -94,7 +103,13 @@ public class EnchantedEntities {
 	}
 	
 	public static void onServerStarting(FMLServerStartingEvent event1) {
+		EnchantEntityCommand.register(event1.getCommandDispatcher());
+	}
+	
+	public static void onServerAboutToStart(FMLServerAboutToStartEvent event1) {
 		dataRegistry.clear();
+		
+		event1.getServer().getResourceManager().addReloadListener(Loader.dataLoader);
 		
 		final BiConsumer<?, EntityEnchantment> emptyConsumer = (o, e) -> {
 		};
@@ -194,13 +209,6 @@ public class EnchantedEntities {
 																.normalize().scale(-enchantment.level);
 												event.getEntityLiving().addVelocity(vec3d.x, vec3d.y, vec3d.z);
 											}
-										} else if (event.getSource().getImmediateSource() != null) {
-//											event.getEntityLiving().addVelocity(
-//													event.getSource().getImmediateSource().getPositionVec()
-//															.subtract(event.getEntityLiving().getPositionVec())
-//															.mul(1,0,1)
-//															.normalize().scale(-enchantment.level)
-//											);
 										}
 									}
 									return event.getAmount();
@@ -208,30 +216,25 @@ public class EnchantedEntities {
 								(entity, enchantment, event) -> event.getAmount(),
 								0
 						),
-						new EnchantmentData(
-								3, "minecraft:thorns", 1,
-								(BiConsumer<LivingEntity, EntityEnchantment>) emptyConsumer,
-								(BiConsumer<CreeperEntity, EntityEnchantment>) emptyConsumer,
-								(entity, enchantment, event) -> event.getAmount(),
-								(entity, enchantment, event) -> {
-									int level = enchantment.level;
-									Random rnd = entity.getRNG();
-									if (!event.getSource().damageType.equals("thorns"))
-										if (event.getSource().getTrueSource() != null) {
-											event.getSource().getTrueSource().attackEntityFrom(
-													DamageSource.causeThornsDamage(event.getEntityLiving()),
-													level > 10 ? level - 10 : 1 + rnd.nextInt(4)
-											);
-										} else if (event.getSource().getImmediateSource() != null) {
-											event.getSource().getTrueSource().attackEntityFrom(
-													DamageSource.causeThornsDamage(event.getEntityLiving()),
-													level > 10 ? level - 10 : 1 + rnd.nextInt(4)
-											);
-										}
-									return event.getAmount();
-								},
-								0
-						),
+						new EnchantmentData(3, "minecraft:thorns", 1)
+								.setOnDamaged(
+										(entity, enchantment, event) -> {
+											int level = enchantment.level;
+											Random rnd = entity.getRNG();
+											if (!event.getSource().damageType.equals("thorns"))
+												if (event.getSource().getTrueSource() != null) {
+													event.getSource().getTrueSource().attackEntityFrom(
+															DamageSource.causeThornsDamage(event.getEntityLiving()),
+															level > 10 ? level - 10 : 1 + rnd.nextInt(4)
+													);
+												} else if (event.getSource().getImmediateSource() != null) {
+													event.getSource().getTrueSource().attackEntityFrom(
+															DamageSource.causeThornsDamage(event.getEntityLiving()),
+															level > 10 ? level - 10 : 1 + rnd.nextInt(4)
+													);
+												}
+											return event.getAmount();
+										}),
 						new EnchantmentData(3, "minecraft:looting", 1)
 								.setOnLoot((lootingEvent, enchantment) -> lootingEvent.setLootingLevel(lootingEvent.getLootingLevel() + enchantment.level)),
 						new EnchantmentData(10, "minecraft:vanishing_curse", 1)
@@ -250,17 +253,15 @@ public class EnchantedEntities {
 									lootingEvent.setCanceled(lootingEvent.isCancelable());
 								}),
 						new EnchantmentData(3, "minecraft:unbreaking", 1)
-								.setOnDamaged((entity,enchant,event)->{
+								.setOnDamaged((entity, enchant, event) -> {
 									if (new Random().nextDouble() * 10 <= enchant.level) {
 										event.setCanceled(event.isCancelable());
 									}
-									return event.getAmount()-(enchant.level/10f);
-//									return event.getAmount();
-								})
+									return event.getAmount() - (enchant.level / 10f);
+								}),
+						new EnchantmentData(1, "enchanted_entities:hide_glint", 0)
 				)
 		);
-		
-		EnchantEntityCommand.register(event1.getCommandDispatcher());
 	}
 	
 	//https://github.com/3TUSK/SRA/blob/bleeding/src/main/java/info/tritusk/anchor/AnchorScreen.java
@@ -282,10 +283,20 @@ public class EnchantedEntities {
 			);
 		}
 		
+		private static Block entityEnchanter;
+		
 		@SubscribeEvent
 		public static void registerBlocks(RegistryEvent.Register<Block> event) {
+			entityEnchanter = new EntityEnchatnerBlock(Block.Properties.from(Blocks.ENCHANTING_TABLE).notSolid()).setRegistryName("enchanted_entities:entity_enchanter");
 			event.getRegistry().register(
-					new EntityEnchatnerBlock(Block.Properties.from(Blocks.ENCHANTING_TABLE)).setRegistryName("enchanted_entities:entity_enchanter")
+					entityEnchanter
+			);
+		}
+		
+		@SubscribeEvent
+		public static void registerItems(RegistryEvent.Register<Item> event) {
+			event.getRegistry().register(
+					new GlintHider(new Item.Properties()).setRegistryName("enchanted_entities:glint_hider")
 			);
 		}
 	}
@@ -297,14 +308,6 @@ public class EnchantedEntities {
 	
 	private static boolean isRendering = false;
 
-//	private static void registerCapabilities() {
-//		CapabilityManager.INSTANCE.register(
-//				EnchantmentCapability.class,
-//				new EnchantmentCapability(),
-//				EnchantmentCapability::new
-//		);
-//	}
-	
 	public static void onEntityHurt(LivingHurtEvent event) {
 		if (event.getSource().getTrueSource() != null) {
 			if (event.getSource().getTrueSource() instanceof LivingEntity) {
@@ -324,43 +327,62 @@ public class EnchantedEntities {
 			for (EntityEnchantment enchantment : EnchantmentManager.getEnchantmentsForEntity((LivingEntity) event.getDamageSource().getTrueSource()))
 				enchantment.data.onLooting(event, enchantment);
 		}
-//		event.setLootingLevel(1000);
+	}
+	
+	private static void worldTick(TickEvent.WorldTickEvent event) {
+		ArrayList<Integer> toRemove = new ArrayList<>();
+		int num = 0;
+		
+		for (EnchantmentDataPacket packet : dataPackets) {
+			if (event.world.getEntityByID(packet.target) != null) {
+				try {
+					INSTANCE.send(
+							PacketDistributor.PLAYER.with(() -> (ServerPlayerEntity) event.world.getEntityByID(packet.target)),
+							packet
+					);
+				} catch (Throwable ignored) {
+					ignored.printStackTrace();
+				}
+				toRemove.add(0, num);
+			}
+			num++;
+		}
+		
+		toRemove.forEach(number -> dataPackets.remove((int) number));
 	}
 	
 	private static void livingTickEvent(LivingEvent.LivingUpdateEvent event) {
 		if (event.getEntityLiving().world.isRemote) {
-			if (!event.getEntity().getPersistentData().contains("EnchantedEntities")) {
+			if (!event.getEntity().getPersistentData().contains("EnchantedEntities") || event.getEntityLiving() instanceof PlayerEntity) {
 				INSTANCE.sendToServer(new EnchantmentRequestPacket(event.getEntity().getEntityId()));
 			}
+			return;
 		} else {
 			if (!event.getEntity().getPersistentData().contains("EnchantedEntities")) {
 				EnchantmentManager.enchantEntity(event.getEntityLiving(), null);
-				if (event.getEntity().world.rand.nextDouble() >= 0.9)
+				EntityStats stats = Loader.dataLoader.getStatsForEntity(event.getEntityLiving().getType().getRegistryName());
+				if (event.getEntity().world.rand.nextDouble() <= stats.enchantmentWeight)
 					for (int i = 0; i < event.getEntity().world.rand.nextInt(4); i++) {
 						EnchantmentData data = dataRegistry.get(event.getEntity().world.rand.nextInt(dataRegistry.size()));
-						EnchantmentManager.enchantEntity(
-								event.getEntityLiving(),
-								new EntityEnchantment(
-										new Random(data.maxLevel * event.getEntity().world.getGameTime()).nextInt(data.maxLevel) + 1,
-										data
-								)
-						);
+						if (stats.blackListedEnchants.contains(data.registryName)) {
+							i--;
+						} else {
+							EnchantmentManager.enchantEntity(
+									event.getEntityLiving(),
+									new EntityEnchantment(
+											new Random(data.maxLevel * event.getEntity().world.getGameTime()).nextInt(data.maxLevel) + 1,
+											data
+									)
+							);
+						}
 					}
-				INSTANCE.send(PacketDistributor.TRACKING_ENTITY.with(event::getEntityLiving), new EnchantmentDataPacket(EnchantmentManager.isEnchanted(event.getEntityLiving()), event.getEntityLiving().getEntityId()));
+				INSTANCE.send(PacketDistributor.TRACKING_ENTITY.with(event::getEntityLiving), new EnchantmentDataPacket(EnchantmentManager.isVisiblyEnchanted(event.getEntityLiving()), event.getEntityLiving().getEntityId(), 0));
 			} else {
-				if (event.getEntityLiving().ticksExisted % 100 == 0) {
-					INSTANCE.send(PacketDistributor.TRACKING_ENTITY.with(event::getEntityLiving), new EnchantmentDataPacket(EnchantmentManager.isEnchanted(event.getEntityLiving()), event.getEntityLiving().getEntityId()));
+				if (event.getEntityLiving().ticksExisted % 1 == 0) {
+					INSTANCE.send(PacketDistributor.TRACKING_ENTITY.with(event::getEntityLiving), new EnchantmentDataPacket(EnchantmentManager.isVisiblyEnchanted(event.getEntityLiving()), event.getEntityLiving().getEntityId(),0));
 				}
 			}
 		}
-//		EnchantmentManager.unenchantEntity(
-//				event.getEntityLiving(),
-//				null
-//		);
-
-//		event.getEntityLiving().hurtResistantTime=0;
-//		if (event.getEntityLiving() instanceof PlayerEntity)
-//		event.getEntityLiving().attackEntityFrom(DamageSource.causeMobDamage(event.getEntityLiving()),-1);
 	}
 	
 	public static void renderLiving(RenderLivingEvent<LivingEntity, ?> event) {

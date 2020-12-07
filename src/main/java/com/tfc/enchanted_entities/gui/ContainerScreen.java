@@ -8,11 +8,17 @@ import com.tfc.enchanted_entities.API.EntityEnchantment;
 import com.tfc.enchanted_entities.EnchantedEntities;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
+import net.minecraft.client.gui.screen.inventory.AnvilScreen;
+import net.minecraft.client.gui.widget.button.Button;
 import net.minecraft.client.renderer.*;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.inventory.container.EnchantmentContainer;
+import net.minecraft.inventory.container.RepairContainer;
+import net.minecraft.item.EnchantedBookItem;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.util.EnchantmentNameParts;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.text.ITextComponent;
@@ -20,7 +26,11 @@ import net.minecraft.util.text.TextFormatting;
 
 import java.util.List;
 
+import static net.minecraft.inventory.container.RepairContainer.getNewRepairCost;
+
 public class ContainerScreen extends net.minecraft.client.gui.screen.inventory.ContainerScreen<Container> {
+	Button button;
+	
 	public ContainerScreen(Container screenContainer, PlayerInventory inv, ITextComponent titleIn) {
 		super(screenContainer, inv, titleIn);
 	}
@@ -30,6 +40,10 @@ public class ContainerScreen extends net.minecraft.client.gui.screen.inventory.C
 		assert this.minecraft != null;
 		
 		this.renderBackground();
+		
+		button = new Button(this.guiLeft+11,this.guiTop+48,20,20,"",(button)->{
+			System.out.println("hi");
+		});
 		
 		this.minecraft.getTextureManager().bindTexture(new ResourceLocation("enchanted_entities:textures/gui/gui.png"));
 		blit(this.guiLeft,this.guiTop,0,0,176,166);
@@ -41,6 +55,7 @@ public class ContainerScreen extends net.minecraft.client.gui.screen.inventory.C
 					18,18
 			);
 		});
+		
 		MatrixStack matrixstack = new MatrixStack();
 		IRenderTypeBuffer.Impl irendertypebuffer$impl = IRenderTypeBuffer.getImpl(Tessellator.getInstance().getBuffer());
 		matrixstack.translate(0.0D, 0.0D, (double)this.itemRenderer.zLevel);
@@ -56,12 +71,17 @@ public class ContainerScreen extends net.minecraft.client.gui.screen.inventory.C
 		);
 		
 		irendertypebuffer$impl.finish();
+
+//		for (net.minecraft.client.gui.widget.Widget button : this.buttons) {
+//			button.render(mouseX, mouseY, 0);
+//		}
+		button.render(mouseX, mouseY, 0);
+		this.minecraft.getTextureManager().bindTexture(new ResourceLocation("enchanted_entities:textures/gui/gui.png"));
+		blit(button.x+1,button.y+2,176,36,16,16,256,256);
 	}
 	
 	@Override
 	protected void drawGuiContainerForegroundLayer(int mouseX, int mouseY) {
-		super.drawGuiContainerForegroundLayer(mouseX, mouseY);
-		
 		final ResourceLocation ENCHANTMENT_TABLE_GUI_TEXTURE = new ResourceLocation("textures/gui/container/enchanting_table.png");
 		
 		assert this.minecraft.player != null;
@@ -163,6 +183,49 @@ public class ContainerScreen extends net.minecraft.client.gui.screen.inventory.C
 			}
 		}
 		
+		ItemStack stack = container.inventorySlots.get(36).getStack();
+		if (stack.getItem().equals(Items.ENCHANTED_BOOK)) {
+			int k2 = stack.getRepairCost();
+			
+			k2 = getNewRepairCost(k2);
+			
+			RenderSystem.pushMatrix();
+			RenderSystem.scalef(0.5f,0.5f,0.5f);
+			
+			int yPos = 70;
+			int color = 8453920;
+			
+			if (playerInventory.player.experienceLevel < k2) {
+				color = 16736352;
+				drawString(font,"Too Expensive!", 10,yPos,color);
+			} else drawString(font,"Enchantment Cost:", 10,yPos,color);
+			
+			drawString(font,""+k2, 10,yPos+10,color);
+			RenderSystem.popMatrix();
+		}
+		
 		this.renderHoveredToolTip(mouseX-this.guiLeft, mouseY-this.guiTop);
+		
+		super.drawGuiContainerForegroundLayer(mouseX, mouseY);
+	}
+	
+	public boolean mouseClicked(double p_mouseClicked_1_, double p_mouseClicked_3_, int p_mouseClicked_5_) {
+		int i = (this.width - this.xSize) / 2;
+		int j = (this.height - this.ySize) / 2;
+		
+		for(int k = 0; k < 3; ++k) {
+			double d0 = p_mouseClicked_1_ - (double)(i + 60);
+			double d1 = p_mouseClicked_3_ - (double)(j + 14 + 19 * k);
+			if (d0 >= 0.0D && d1 >= 0.0D && d0 < 108.0D && d1 < 19.0D && this.container.enchantItem(this.minecraft.player, k)) {
+				this.minecraft.playerController.sendEnchantPacket((this.container).windowId, k);
+				return true;
+			}
+		}
+		
+		if (p_mouseClicked_1_ >= button.x && p_mouseClicked_1_ <= button.x + button.getWidth())
+			if (p_mouseClicked_3_ >= button.y && p_mouseClicked_3_ <= button.y + button.getHeight())
+				this.minecraft.playerController.sendEnchantPacket((this.container).windowId, 4);
+		
+		return super.mouseClicked(p_mouseClicked_1_, p_mouseClicked_3_, p_mouseClicked_5_);
 	}
 }
